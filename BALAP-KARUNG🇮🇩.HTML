@@ -1,0 +1,364 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Balap Karung - Board Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Poppins:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #fef3c7;
+            touch-action: manipulation;
+            overflow-x: hidden;
+        }
+
+        .title-font {
+            font-family: 'Luckiest+Guy', cursive;
+        }
+
+        .board-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            max-width: 450px;
+            margin: 0 auto;
+        }
+
+        .cell {
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            border-radius: 16px;
+            background: #eab308;
+            box-shadow: inset 0 -6px 0 rgba(0,0,0,0.1);
+            font-weight: bold;
+            color: rgba(255,255,255,0.8);
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .cell-finish { background: #10b981; color: white; border: 2px dashed white; }
+        .cell-start { background: #3b82f6; color: white; }
+        .cell-trap { background: #f43f5e; color: white; }
+        .cell-bonus { background: #a855f7; color: white; }
+
+        /* Karakter & Animasi */
+        .character-container {
+            width: 50px;
+            height: 50px;
+            position: absolute;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            pointer-events: none;
+        }
+
+        /* Karung (Body) */
+        .karung {
+            width: 32px;
+            height: 40px;
+            background: #d97706; /* Cokelat Karung */
+            border-radius: 8px 8px 4px 4px;
+            position: relative;
+            border: 2px solid #92400e;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            animation: idle 2s ease-in-out infinite;
+        }
+
+        /* Kepala Pemain */
+        .head {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            position: absolute;
+            top: -18px;
+            left: 2px;
+            border: 2px solid rgba(0,0,0,0.1);
+        }
+
+        .p1-color .head { background: #ef4444; }
+        .p2-color .head { background: #10b981; }
+        .p2-color .karung { background: #b45309; }
+
+        /* Animasi Berjalan/Melompat */
+        @keyframes jumpMove {
+            0% { transform: translateY(0) scaleX(1); }
+            30% { transform: translateY(-30px) scaleX(0.9); }
+            70% { transform: translateY(-35px) scaleX(0.85); }
+            100% { transform: translateY(0) scaleX(1.1); }
+        }
+
+        /* Animasi Santai (Idle) */
+        @keyframes idle {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-3px) rotate(2deg); }
+        }
+
+        .moving {
+            animation: jumpMove 0.5s ease !important;
+        }
+
+        .active-turn {
+            filter: drop-shadow(0 0 8px #fbbf24);
+            z-index: 60;
+        }
+
+        .dice {
+            width: 70px;
+            height: 70px;
+            background: white;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            box-shadow: 0 6px 0 #cbd5e1, 0 10px 15px rgba(0,0,0,0.1);
+            transition: transform 0.1s;
+        }
+
+        .modal {
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(4px);
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body class="bg-amber-50 min-h-screen flex items-center justify-center p-2">
+
+    <div class="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl border-8 border-amber-500 overflow-hidden">
+        <!-- Dashboard Atas -->
+        <div class="bg-amber-500 p-5 text-center text-white relative">
+            <h1 class="title-font text-3xl md:text-4xl drop-shadow-md">BALAP KARUNG</h1>
+            <p class="text-xs font-bold tracking-tighter opacity-80 mt-1 uppercase">Edisi Santai Bareng Teman</p>
+        </div>
+
+        <!-- Indikator Giliran -->
+        <div class="flex border-b-4 border-amber-100 bg-white">
+            <div id="p1-ui" class="flex-1 p-4 text-center transition-all duration-500 border-r-2 border-amber-50">
+                <div class="w-10 h-10 bg-red-500 rounded-full mx-auto mb-1 border-4 border-white shadow-md"></div>
+                <p class="font-bold text-gray-700 text-sm">Pemain 1</p>
+            </div>
+            <div id="p2-ui" class="flex-1 p-4 text-center transition-all duration-500 opacity-30">
+                <div class="w-10 h-10 bg-emerald-500 rounded-full mx-auto mb-1 border-4 border-white shadow-md"></div>
+                <p class="font-bold text-gray-700 text-sm">Pemain 2</p>
+            </div>
+        </div>
+
+        <!-- Arena Papan -->
+        <div class="p-4 bg-orange-50/50 relative">
+            <div id="board" class="board-grid">
+                <!-- Grid diisi via JS -->
+            </div>
+            
+            <!-- Karakter (Diletakkan secara absolute di atas grid) -->
+            <div id="player1" class="character-container p1-color">
+                <div class="head"></div>
+                <div class="karung"></div>
+            </div>
+            <div id="player2" class="character-container p2-color">
+                <div class="head"></div>
+                <div class="karung"></div>
+            </div>
+        </div>
+
+        <!-- Area Kontrol -->
+        <div class="p-6 flex flex-col items-center gap-6">
+            <div class="flex items-center gap-8">
+                <div id="dice" class="dice title-font text-amber-600">?</div>
+                <div class="text-left">
+                    <p id="status-msg" class="text-lg font-bold text-gray-800 leading-tight">Ayo Main!</p>
+                    <p class="text-xs text-gray-500">Klik tombol kocok!</p>
+                </div>
+            </div>
+            
+            <button id="roll-btn" class="w-full bg-amber-500 hover:bg-amber-600 active:translate-y-1 text-white font-black py-4 rounded-2xl shadow-[0_6px_0_#b45309] transition-all text-xl tracking-widest uppercase">
+                KOCOK DADU!
+            </button>
+        </div>
+
+        <!-- Legenda -->
+        <div class="bg-slate-800 p-3 flex justify-around text-[9px] text-white font-bold uppercase tracking-wider">
+            <div class="flex items-center gap-1"><span class="w-2 h-2 bg-rose-500 rounded-full"></span> Jebakan</div>
+            <div class="flex items-center gap-1"><span class="w-2 h-2 bg-purple-500 rounded-full"></span> Bonus</div>
+            <div class="flex items-center gap-1"><span class="w-2 h-2 bg-emerald-500 rounded-full"></span> Finis</div>
+        </div>
+    </div>
+
+    <!-- Modal Menang -->
+    <div id="win-modal" class="modal p-6">
+        <div class="bg-white rounded-3xl p-8 text-center shadow-2xl max-w-xs w-full border-4 border-amber-400">
+            <div class="text-6xl mb-4">🏆</div>
+            <h2 class="title-font text-4xl text-amber-600 mb-2">MENANG!</h2>
+            <p id="winner-name" class="text-xl font-bold text-gray-700 mb-6 uppercase">Pemain 1</p>
+            <button onclick="resetGame()" class="bg-amber-500 text-white font-bold py-3 px-8 rounded-full hover:scale-105 transition-transform">
+                Main Lagi
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const BOARD_SIZE = 20;
+        const traps = [5, 11, 17]; 
+        const bonuses = [3, 9, 15];
+
+        let p1Pos = 0;
+        let p2Pos = 0;
+        let currentPlayer = 1;
+        let isMoving = false;
+
+        function initBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+            for (let i = 0; i < BOARD_SIZE; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.id = `cell-${i}`;
+                
+                if (i === 0) {
+                    cell.classList.add('cell-start');
+                    cell.innerHTML = '<span class="text-[10px]">START</span>';
+                } else if (i === BOARD_SIZE - 1) {
+                    cell.classList.add('cell-finish');
+                    cell.innerHTML = '🏁';
+                } else if (traps.includes(i)) {
+                    cell.classList.add('cell-trap');
+                    cell.innerHTML = '💥';
+                } else if (bonuses.includes(i)) {
+                    cell.classList.add('cell-bonus');
+                    cell.innerHTML = '✨';
+                } else {
+                    cell.innerText = i + 1;
+                }
+                board.appendChild(cell);
+            }
+            positionPlayers();
+        }
+
+        function positionPlayers() {
+            const p1 = document.getElementById('player1');
+            const p2 = document.getElementById('player2');
+            
+            const cell1 = document.getElementById(`cell-${p1Pos}`).getBoundingClientRect();
+            const cell2 = document.getElementById(`cell-${p2Pos}`).getBoundingClientRect();
+            const boardRect = document.getElementById('board').getBoundingClientRect();
+
+            // Offset agar tidak bertumpukan persis di tengah
+            const offsetP1 = p1Pos === p2Pos ? -12 : 0;
+            const offsetP2 = p1Pos === p2Pos ? 12 : 0;
+
+            p1.style.left = `${(cell1.left - boardRect.left) + (cell1.width / 2) - 25 + offsetP1}px`;
+            p1.style.top = `${(cell1.top - boardRect.top) + (cell1.height / 2) - 35}px`;
+
+            p2.style.left = `${(cell2.left - boardRect.left) + (cell2.width / 2) - 25 + offsetP2}px`;
+            p2.style.top = `${(cell2.top - boardRect.top) + (cell2.height / 2) - 35}px`;
+
+            // Atur Visual Giliran
+            document.getElementById('p1-ui').style.opacity = currentPlayer === 1 ? '1' : '0.3';
+            document.getElementById('p2-ui').style.opacity = currentPlayer === 2 ? '1' : '0.3';
+            document.getElementById('player1').classList.toggle('active-turn', currentPlayer === 1);
+            document.getElementById('player2').classList.toggle('active-turn', currentPlayer === 2);
+        }
+
+        async function roll() {
+            if (isMoving) return;
+            isMoving = true;
+
+            const dice = document.getElementById('dice');
+            const status = document.getElementById('status-msg');
+            const btn = document.getElementById('roll-btn');
+
+            btn.disabled = true;
+            status.innerText = "Mengocok...";
+
+            // Animasi Dadu
+            let val = 1;
+            for(let i=0; i<10; i++) {
+                val = Math.floor(Math.random() * 6) + 1;
+                dice.innerText = val;
+                await new Promise(r => setTimeout(r, 60));
+            }
+
+            status.innerText = `Loncatan: ${val}!`;
+            await animateMove(val);
+        }
+
+        async function animateMove(steps) {
+            for (let i = 0; i < steps; i++) {
+                if (currentPlayer === 1) {
+                    if (p1Pos < BOARD_SIZE - 1) p1Pos++;
+                } else {
+                    if (p2Pos < BOARD_SIZE - 1) p2Pos++;
+                }
+                
+                const activeChar = document.getElementById(`player${currentPlayer}`);
+                activeChar.classList.add('moving');
+                positionPlayers();
+                
+                await new Promise(r => setTimeout(r, 500));
+                activeChar.classList.remove('moving');
+
+                if ((currentPlayer === 1 ? p1Pos : p2Pos) === BOARD_SIZE - 1) {
+                    endGame();
+                    return;
+                }
+            }
+
+            // Cek Event Kotak
+            const finalPos = currentPlayer === 1 ? p1Pos : p2Pos;
+            if (traps.includes(finalPos)) {
+                document.getElementById('status-msg').innerText = "Yah, kepeleset! Mundur 2";
+                await new Promise(r => setTimeout(r, 600));
+                if (currentPlayer === 1) p1Pos = Math.max(0, p1Pos - 2);
+                else p2Pos = Math.max(0, p2Pos - 2);
+            } else if (bonuses.includes(finalPos)) {
+                document.getElementById('status-msg').innerText = "Wush! Loncat jauh! Maju 2";
+                await new Promise(r => setTimeout(r, 600));
+                if (currentPlayer === 1) p1Pos = Math.min(BOARD_SIZE - 1, p1Pos + 2);
+                else p2Pos = Math.min(BOARD_SIZE - 1, p2Pos + 2);
+            }
+
+            positionPlayers();
+            currentPlayer = currentPlayer === 1 ? 2 : 1;
+            isMoving = false;
+            document.getElementById('roll-btn').disabled = false;
+            document.getElementById('status-msg').innerText = `Giliran Pemain ${currentPlayer}`;
+        }
+
+        function endGame() {
+            document.getElementById('winner-name').innerText = `Pemain ${currentPlayer}`;
+            document.getElementById('win-modal').style.display = 'flex';
+        }
+
+        function resetGame() {
+            p1Pos = 0;
+            p2Pos = 0;
+            currentPlayer = 1;
+            isMoving = false;
+            document.getElementById('win-modal').style.display = 'none';
+            document.getElementById('roll-btn').disabled = false;
+            document.getElementById('dice').innerText = '?';
+            document.getElementById('status-msg').innerText = 'Mulai lagi!';
+            initBoard();
+        }
+
+        document.getElementById('roll-btn').addEventListener('click', roll);
+        window.addEventListener('resize', positionPlayers);
+        window.onload = initBoard;
+
+    </script>
+</body>
+</html>
